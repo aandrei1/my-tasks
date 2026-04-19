@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0:#0e0e10; --bg1:#141416; --bg2:#1c1c1f; --bg3:#242428; --bg4:#2e2e33;
+  --border:rgba(255,255,255,0.07); --border-h:rgba(255,255,255,0.14);
+  --t0:#f0f0f2; --t1:#a8a8b3; --t2:#5e5e6a;
+  --accent:#7c6af7; --accent-s:rgba(124,106,247,0.15); --accent-b:rgba(124,106,247,0.4);
+  --green:#3ecf8e; --green-s:rgba(62,207,142,0.12);
+  --amber:#f59e0b; --amber-s:rgba(245,158,11,0.12);
+  --red:#ef4444; --red-s:rgba(239,68,68,0.1);
+  --r:10px; --rl:14px;
+  --sidebar-w:240px;
+  --bnav:0px;
+}
+@media(max-width:640px){ :root{ --bnav:60px; } }
+
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg0);color:var(--t0);display:flex;flex-direction:column;}
+
+/* OVERLAY */
+#overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);
+  backdrop-filter:blur(2px);z-index:40;opacity:0;transition:opacity 0.25s;
+}
+#overlay.show{display:block;opacity:1;}
+
+/* SIDEBAR — mobile: fixed drawer; desktop: inline */
+#sidebar{
+  position:fixed;top:0;left:0;height:100%;width:var(--sidebar-w);
+  background:var(--bg1);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:50;
+  transform:translateX(-100%);
+  transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  will-change:transform;
+}
+#sidebar.open{ transform:translateX(0); }
+
+@media(min-width:641px){
+  #sidebar{
+    position:relative;height:auto;flex-shrink:0;
+    transform:none !important;
+    width:var(--sidebar-w);min-width:var(--sidebar-w);
+    transition:width 0.25s cubic-bezier(0.4,0,0.2,1),
+               min-width 0.25s cubic-bezier(0.4,0,0.2,1),
+               border-color 0.25s;
+  }
+  #sidebar.collapsed{width:0;min-width:0;border-color:transparent;overflow:hidden;}
+  #sidebar.collapsed .si{opacity:0;pointer-events:none;}
+  #sidebar .si{transition:opacity 0.18s 0.04s;}
+  #overlay{display:none !important;}
+}
+
+.si{display:flex;flex-direction:column;height:100%;}
+.sidebar-header{
+  padding:20px 18px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.logo{font-size:17px;font-weight:600;letter-spacing:-0.3px;display:flex;align-items:center;gap:8px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);}
+.sidebar-close{
+  display:none;background:none;border:none;color:var(--t2);cursor:pointer;
+  padding:6px;font-size:16px;line-height:1;border-radius:6px;
+  transition:color 0.15s,background 0.15s;
+}
+.sidebar-close:hover{color:var(--t0);background:var(--bg3);}
+@media(max-width:640px){.sidebar-close{display:flex;align-items:center;justify-content:center;}}
+.slabel{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--t2);padding:16px 18px 6px;}
+.project-list{flex:1;overflow-y:auto;padding:4px 8px;}
+.project-list::-webkit-scrollbar{width:3px;}
+.project-list::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:99px;}
+.project-item{
+  display:flex;align-items:center;gap:9px;padding:10px;
+  border-radius:var(--r);cursor:pointer;transition:background 0.15s;
+  user-select:none;position:relative;min-height:44px;
+}
+.project-item:hover{background:var(--bg3);}
+.project-item.active{background:var(--accent-s);}
+.project-item.active .pname{color:var(--t0);}
+.pcol{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.pname{font-size:13.5px;color:var(--t1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pcnt{font-size:11px;font-family:'DM Mono',monospace;color:var(--t2);background:var(--bg4);padding:1px 6px;border-radius:99px;}
+.pdel{
+  display:none;background:none;border:none;color:var(--red);
+  cursor:pointer;font-size:14px;padding:4px 6px;border-radius:4px;min-height:32px;line-height:1;
+}
+.project-item:hover .pdel{display:block;}
+@media(max-width:640px){.pdel{display:block !important;}}
+.add-proj-area{padding:10px 8px 16px;flex-shrink:0;}
+.add-proj-btn{
+  width:100%;background:none;border:1px dashed var(--border-h);color:var(--t2);
+  font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;
+  border-radius:var(--r);cursor:pointer;text-align:left;transition:all 0.15s;
+  display:flex;align-items:center;gap:8px;min-height:44px;
+}
+.add-proj-btn:hover{border-color:var(--accent-b);color:var(--accent);}
+
+/* APP SHELL */
+#app{display:flex;flex:1;overflow:hidden;min-height:0;}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+
+/* TOPBAR */
+.topbar{
+  height:60px;padding:0 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;background:var(--bg0);gap:10px;
+}
+.topbar-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
+.stoggle{
+  background:var(--bg2);border:1px solid var(--border);color:var(--t1);
+  cursor:pointer;width:34px;height:34px;min-width:34px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:background 0.15s,color 0.15s,transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+.stoggle:hover{background:var(--bg3);color:var(--t0);}
+.stoggle.rotated{transform:rotate(180deg);}
+.title-area{min-width:0;flex:1;}
+.ptitle{font-size:17px;font-weight:600;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pmeta{font-size:11px;color:var(--t2);}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.swrap{position:relative;display:flex;align-items:center;}
+.sicon{position:absolute;left:10px;color:var(--t2);font-size:14px;pointer-events:none;line-height:1;}
+#searchInput{
+  background:var(--bg2);border:1px solid var(--border);color:var(--t0);
+  font-family:'DM Sans',sans-serif;font-size:13px;
+  padding:7px 12px 7px 30px;border-radius:var(--r);width:180px;outline:none;
+  transition:border-color 0.15s,width 0.2s;
+}
+#searchInput:focus{border-color:var(--accent-b);width:220px;}
+#searchInput::placeholder{color:var(--t2);}
+@media(max-width:640px){
+  #searchInput{
+    width:0;padding:7px 0;border-color:transparent;background:transparent;
+    transition:width 0.2s,padding 0.2s,border-color 0.2s,background 0.2s;
+  }
+  #searchInput.open{width:130px;padding:7px 12px 7px 30px;background:var(--bg2);border-color:var(--border);}
+  .sicon{pointer-events:all;cursor:pointer;}
+}
+.btn-p{
+  background:var(--accent);color:#fff;border:none;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+  padding:8px 14px;border-radius:var(--r);cursor:pointer;
+  transition:opacity 0.15s,transform 0.1s;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;min-height:36px;
+}
+.btn-p:hover{opacity:0.88;}
+.btn-p:active{transform:scale(0.97);}
+@media(max-width:480px){.btn-p .lbl{display:none;}.btn-p{padding:8px 10px;}}
+
+/* FILTER BAR */
+.fbar{
+  height:48px;padding:0 18px;display:flex;gap:4px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--bg0);align-items:center;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+}
+.fbar::-webkit-scrollbar{display:none;}
+.ftab{
+  font-size:12.5px;padding:6px 12px;border-radius:99px;border:none;
+  cursor:pointer;font-family:'DM Sans',sans-serif;background:none;
+  color:var(--t2);transition:all 0.15s;white-space:nowrap;min-height:32px;
+}
+.ftab:hover{color:var(--t1);background:var(--bg3);}
+.ftab.active{background:var(--bg3);color:var(--t0);font-weight:500;}
+.sort-wrap{margin-left:auto;flex-shrink:0;}
+.sort-sel{
+  background:var(--bg2);border:1px solid var(--border);color:var(--t1);
+  font-family:'DM Sans',sans-serif;font-size:12px;padding:5px 8px;
+  border-radius:var(--r);outline:none;cursor:pointer;
+}
+
+/* TASK AREA */
+#taskArea{
+  flex:1;overflow-y:auto;padding:20px;
+  padding-bottom:calc(20px + var(--bnav));
+}
+#taskArea::-webkit-scrollbar{width:4px;}
+#taskArea::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:99px;}
+
+/* KANBAN */
+.kcols{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+@media(max-width:860px){.kcols{grid-template-columns:1fr;}}
+.kcol{display:flex;flex-direction:column;gap:8px;}
+.kcol.hm{display:none;}
+.kcol-hdr{
+  display:flex;align-items:center;gap:8px;padding:0 4px 10px;
+  border-bottom:1px solid var(--border);
+}
+.kcdot{width:6px;height:6px;border-radius:50%;}
+.kctitle{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--t2);}
+.kccnt{font-size:11px;font-family:'DM Mono',monospace;color:var(--t2);background:var(--bg3);padding:1px 7px;border-radius:99px;margin-left:auto;}
+.dropzone{
+  min-height:40px;border-radius:var(--r);
+  display:flex;flex-direction:column;gap:8px;flex:1;
+  transition:background 0.15s;
+}
+.dropzone.dov{background:var(--accent-s);}
+
+/* TASK CARD */
+.tcard{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);
+  padding:14px 16px;cursor:grab;position:relative;user-select:none;
+  transition:border-color 0.15s,background 0.15s,transform 0.12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tcard:hover{border-color:var(--border-h);background:var(--bg3);}
+.tcard:active{transform:scale(0.99);}
+.tcard.dragging{opacity:0.4;transform:scale(0.97);}
+.tcard.done .ttitle{text-decoration:line-through;color:var(--t2);}
+.tcard-top{display:flex;align-items:flex-start;gap:10px;}
+.tchk{
+  width:18px;height:18px;min-width:18px;border-radius:50%;
+  border:1.5px solid var(--border-h);cursor:pointer;flex-shrink:0;margin-top:2px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;background:none;outline:none;
+}
+.tchk:hover{border-color:var(--green);}
+.tcard.done .tchk{background:var(--green);border-color:var(--green);}
+.tchk svg{display:none;}
+.tcard.done .tchk svg{display:block;}
+.tcontent{flex:1;min-width:0;}
+.ttitle{font-size:13.5px;font-weight:500;color:var(--t0);line-height:1.5;word-break:break-word;}
+.tdesc{font-size:12px;color:var(--t2);margin-top:4px;line-height:1.5;word-break:break-word;}
+.tfoot{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.pb{font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:99px;}
+.ph{background:var(--red-s);color:#f87171;}
+.pm{background:var(--amber-s);color:var(--amber);}
+.pl{background:var(--green-s);color:var(--green);}
+.due{font-size:10.5px;color:var(--t2);display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;}
+.due.ov{color:#f87171;}
+.tag{font-size:10.5px;padding:2px 8px;border-radius:99px;background:var(--bg4);color:var(--t1);}
+.tacts{position:absolute;top:10px;right:10px;display:none;gap:4px;}
+.tcard:hover .tacts{display:flex;}
+@media(hover:none){.tacts{display:flex !important;top:auto;bottom:10px;}}
+.tact{
+  background:var(--bg4);border:none;color:var(--t2);
+  font-size:12px;padding:5px 7px;border-radius:5px;cursor:pointer;
+  transition:all 0.15s;font-family:'DM Sans',sans-serif;min-height:30px;
+}
+.tact:hover{background:var(--bg0);color:var(--t0);}
+.tact.del:hover{color:var(--red);}
+
+/* EMPTY */
+.ecol{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:28px 16px;color:var(--t2);border:1px dashed var(--border);
+  border-radius:var(--rl);font-size:12.5px;gap:5px;text-align:center;
+}
+#emptyProj{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:10px;color:var(--t2);
+}
+
+/* STATS */
+.srow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+@media(max-width:640px){.srow{grid-template-columns:repeat(2,1fr);}}
+.scard{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;}
+.slbl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;}
+.sval{font-size:22px;font-weight:600;color:var(--t0);margin-top:2px;font-family:'DM Mono',monospace;}
+.ssub{font-size:11px;color:var(--t2);margin-top:2px;}
+.pbg{background:var(--bg4);border-radius:99px;height:3px;overflow:hidden;margin-top:6px;}
+.pfill{height:100%;border-radius:99px;background:var(--green);transition:width 0.4s ease;}
+
+/* BOTTOM NAV */
+#bnav{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  height:var(--bnav);background:var(--bg1);border-top:1px solid var(--border);
+  flex-direction:row;align-items:stretch;z-index:30;
+}
+@media(max-width:640px){#bnav{display:flex;}}
+.bnbtn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;background:none;border:none;color:var(--t2);cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;
+  transition:color 0.15s;padding:6px 0;
+}
+.bnbtn:active{color:var(--accent);}
+.bnicon{font-size:19px;line-height:1;}
+.bnsep{width:1px;background:var(--border);margin:10px 0;}
+
+/* MODALS */
+.moverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:100;opacity:0;pointer-events:none;transition:opacity 0.2s;
+}
+@media(min-width:641px){.moverlay{align-items:center;}}
+.moverlay.open{opacity:1;pointer-events:all;}
+.modal{
+  background:var(--bg2);border:1px solid var(--border-h);
+  border-radius:var(--rl) var(--rl) 0 0;
+  padding:24px 22px calc(22px + env(safe-area-inset-bottom));
+  width:100%;max-height:90vh;overflow-y:auto;
+  box-shadow:0 -4px 32px rgba(0,0,0,0.5);
+  transform:translateY(20px);transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+@media(min-width:641px){
+  .modal{border-radius:var(--rl);padding:28px;width:460px;max-width:96vw;max-height:none;overflow:visible;}
+}
+.moverlay.open .modal{transform:translateY(0);}
+.mhandle{width:36px;height:4px;border-radius:99px;background:var(--bg4);margin:0 auto 18px;}
+@media(min-width:641px){.mhandle{display:none;}}
+.mtitle{font-size:17px;font-weight:600;margin-bottom:18px;color:var(--t0);}
+.fg{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.fl{font-size:12px;font-weight:500;color:var(--t1);}
+.fi,.fta,.fsel{
+  background:var(--bg3);border:1px solid var(--border);color:var(--t0);
+  font-family:'DM Sans',sans-serif;font-size:16px;
+  padding:10px 12px;border-radius:var(--r);outline:none;
+  transition:border-color 0.15s;width:100%;-webkit-appearance:none;
+}
+@media(min-width:641px){.fi,.fta,.fsel{font-size:13.5px;}}
+.fi:focus,.fta:focus,.fsel:focus{border-color:var(--accent-b);}
+.fi::placeholder,.fta::placeholder{color:var(--t2);}
+.fta{resize:vertical;min-height:72px;line-height:1.5;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.mfoot{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+.btn-g{
+  background:none;border:1px solid var(--border-h);color:var(--t1);
+  font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 16px;
+  border-radius:var(--r);cursor:pointer;transition:all 0.15s;min-height:40px;
+}
+.btn-g:hover{background:var(--bg3);color:var(--t0);}
+.cpick{display:flex;gap:10px;flex-wrap:wrap;}
+.cswatch{
+  width:26px;height:26px;border-radius:50%;cursor:pointer;
+  transition:transform 0.15s,box-shadow 0.15s;border:2px solid transparent;
+}
+.cswatch:hover,.cswatch.sel{transform:scale(1.2);box-shadow:0 0 0 2px var(--bg2),0 0 0 4px currentColor;}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:calc(16px + var(--bnav));left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:var(--bg3);border:1px solid var(--border-h);color:var(--t0);
+  font-size:13px;padding:10px 18px;border-radius:var(--r);
+  box-shadow:0 4px 24px rgba(0,0,0,0.4);opacity:0;
+  transition:all 0.25s;z-index:200;pointer-events:none;white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="si">
+      <div class="sidebar-header">
+        <div class="logo"><span class="logo-dot"></span>Planner</div>
+        <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+      </div>
+      <div class="slabel">Proiecte</div>
+      <div class="project-list" id="projectList"></div>
+      <div class="add-proj-area">
+        <button class="add-proj-btn" onclick="openProjModal()">
+          <span style="font-size:16px;line-height:1">+</span> Proiect nou
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="stoggle" id="stoggle" onclick="toggleSidebar()" title="Meniu (Ctrl+B)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <rect x="1" y="1" width="12" height="12" rx="2"/>
+            <line x1="5" y1="1" x2="5" y2="13"/>
+          </svg>
+        </button>
+        <div class="title-area">
+          <div class="ptitle" id="mainTitle">Selectează proiect</div>
+          <div class="pmeta" id="mainMeta"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="swrap">
+          <span class="sicon" onclick="tSearch()">⌕</span>
+          <input type="text" id="searchInput" placeholder="Caută..." oninput="renderTasks()">
+        </div>
+        <button class="btn-p" onclick="openTaskModal()">
+          <span>+</span><span class="lbl"> Task nou</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="fbar">
+      <button class="ftab active" data-f="all" onclick="setFilter('all',this)">Toate</button>
+      <button class="ftab" data-f="todo" onclick="setFilter('todo',this)">De făcut</button>
+      <button class="ftab" data-f="inprogress" onclick="setFilter('inprogress',this)">În progres</button>
+      <button class="ftab" data-f="done" onclick="setFilter('done',this)">Finalizate</button>
+      <div class="sort-wrap">
+        <select class="sort-sel" id="sortSel" onchange="renderTasks()">
+          <option value="created">Recent</option>
+          <option value="priority">Prioritate</option>
+          <option value="due">Termen</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="taskArea">
+      <div id="emptyProj">
+        <div style="font-size:34px;opacity:0.18">✦</div>
+        <div style="font-size:15px;font-weight:500;color:var(--t1)">Niciun proiect selectat</div>
+        <div style="font-size:12.5px;text-align:center">Apasă butonul de meniu sau creează un proiect nou</div>
+      </div>
+      <div id="kanban" style="display:none">
+        <div class="srow" id="srow"></div>
+        <div class="kcols">
+          <div class="kcol" id="kc-todo">
+            <div class="kcol-hdr">
+              <span class="kcdot" style="background:#5e5e6a"></span>
+              <span class="kctitle">De făcut</span>
+              <span class="kccnt" id="cnt-todo">0</span>
+            </div>
+            <div class="dropzone" id="col-todo"
+              ondragover="dov(event)" ondrop="drop(event,'todo')" ondragleave="dlv(event)"></div>
+          </div>
+          <div class="kcol" id="kc-inprogress">
+            <div class="kcol-hdr">
+              <span class="kcdot" style="background:var(--accent)"></span>
+              <span class="kctitle">În progres</span>
+              <span class="kccnt" id="cnt-inprogress">0</span>
+            </div>
+            <div class="dropzone" id="col-inprogress"
+              ondragover="dov(event)" ondrop="drop(event,'inprogress')" ondragleave="dlv(event)"></div>
+          </div>
+          <div class="kcol" id="kc-done">
+            <div class="kcol-hdr">
+              <span class="kcdot" style="background:var(--green)"></span>
+              <span class="kctitle">Finalizate</span>
+              <span class="kccnt" id="cnt-done">0</span>
+            </div>
+            <div class="dropzone" id="col-done"
+              ondragover="dov(event)" ondrop="drop(event,'done')" ondragleave="dlv(event)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BOTTOM NAV (mobile) -->
+<div id="bnav">
+  <button class="bnbtn" onclick="toggleSidebar()">
+    <span class="bnicon">☰</span><span>Proiecte</span>
+  </button>
+  <div class="bnsep"></div>
+  <button class="bnbtn" onclick="openTaskModal()">
+    <span class="bnicon">＋</span><span>Task nou</span>
+  </button>
+  <div class="bnsep"></div>
+  <button class="bnbtn" onclick="openProjModal()">
+    <span class="bnicon">◎</span><span>Proiect</span>
+  </button>
+</div>
+
+<!-- TASK MODAL -->
+<div class="moverlay" id="taskModal">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtitle" id="tmTitle">Task nou</div>
+    <div class="fg"><label class="fl">Titlu *</label><input class="fi" id="tTitle" placeholder="Ce trebuie făcut?"></div>
+    <div class="fg"><label class="fl">Descriere</label><textarea class="fta" id="tDesc" placeholder="Detalii opționale..."></textarea></div>
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">Prioritate</label>
+        <select class="fsel" id="tPrio"><option value="low">Scăzută</option><option value="med" selected>Medie</option><option value="high">Ridicată</option></select>
+      </div>
+      <div class="fg">
+        <label class="fl">Status</label>
+        <select class="fsel" id="tStatus"><option value="todo">De făcut</option><option value="inprogress">În progres</option><option value="done">Finalizat</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Termen</label><input class="fi" type="date" id="tDue"></div>
+      <div class="fg"><label class="fl">Tag</label><input class="fi" id="tTag" placeholder="design, dev..."></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn-g" onclick="closeTaskModal()">Anulează</button>
+      <button class="btn-p" onclick="saveTask()">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT MODAL -->
+<div class="moverlay" id="projModal">
+  <div class="modal" style="max-width:380px">
+    <div class="mhandle"></div>
+    <div class="mtitle">Proiect nou</div>
+    <div class="fg"><label class="fl">Nume *</label><input class="fi" id="pName" placeholder="ex: Redesign website"></div>
+    <div class="fg"><label class="fl">Culoare</label><div class="cpick" id="cpick"></div></div>
+    <div class="mfoot">
+      <button class="btn-g" onclick="closeProjModal()">Anulează</button>
+      <button class="btn-p" onclick="saveProj()">Creează</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const COLORS=['#7c6af7','#3ecf8e','#f59e0b','#ef4444','#38bdf8','#f472b6','#a78bfa','#34d399','#fb923c','#60a5fa'];
+let D=JSON.parse(localStorage.getItem('planner_v2')||'null')||{projects:[],tasks:[]};
+let curProj=null,curFilter='all',editId=null,selColor=COLORS[0],dragId=null;
+const mob=()=>window.innerWidth<=640;
+const $=id=>document.getElementById(id);
+const save=()=>localStorage.setItem('planner_v2',JSON.stringify(D));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* SIDEBAR */
+function toggleSidebar(){
+  const s=$('sidebar');
+  if(mob()){
+    const open=s.classList.contains('open');
+    s.classList.toggle('open',!open);
+    $('overlay').classList.toggle('show',!open);
+  } else {
+    const col=s.classList.toggle('collapsed');
+    $('stoggle').classList.toggle('rotated',col);
+  }
+}
+function closeSidebar(){
+  $('sidebar').classList.remove('open');
+  $('overlay').classList.remove('show');
+}
+function initSidebar(){
+  if(mob()){
+    $('sidebar').classList.remove('collapsed');
+    $('stoggle').classList.remove('rotated');
+  }
+}
+
+/* SEARCH toggle on mobile */
+function tSearch(){
+  if(!mob()) return;
+  const i=$('searchInput');
+  i.classList.toggle('open');
+  if(i.classList.contains('open')) i.focus();
+}
+
+/* SIDEBAR RENDER */
+function renderSidebar(){
+  const list=$('projectList');list.innerHTML='';
+  D.projects.forEach(p=>{
+    const cnt=D.tasks.filter(t=>t.pid===p.id).length;
+    const d=document.createElement('div');
+    d.className='project-item'+(curProj===p.id?' active':'');
+    d.innerHTML=`<span class="pcol" style="background:${p.color}"></span>
+      <span class="pname">${esc(p.name)}</span>
+      <span class="pcnt">${cnt}</span>
+      <button class="pdel" onclick="delProj('${p.id}',event)">✕</button>`;
+    d.onclick=e=>{
+      if(e.target.classList.contains('pdel')) return;
+      selProj(p.id);if(mob()) closeSidebar();
+    };
+    list.appendChild(d);
+  });
+}
+
+function selProj(id){
+  curProj=id;curFilter='all';
+  document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('[data-f="all"]').classList.add('active');
+  renderSidebar();renderMain();
+}
+function delProj(id,e){
+  e.stopPropagation();
+  if(!confirm('Ștergi proiectul și toate task-urile?')) return;
+  D.projects=D.projects.filter(p=>p.id!==id);
+  D.tasks=D.tasks.filter(t=>t.pid!==id);
+  if(curProj===id) curProj=null;
+  save();renderSidebar();renderMain();toast('Proiect șters');
+}
+
+/* MAIN */
+function renderMain(){
+  const emp=$('emptyProj'),kan=$('kanban');
+  if(!curProj){emp.style.display='flex';kan.style.display='none';$('mainTitle').textContent='Selectează proiect';$('mainMeta').textContent='';return;}
+  const p=D.projects.find(x=>x.id===curProj);if(!p) return;
+  emp.style.display='none';kan.style.display='block';
+  $('mainTitle').textContent=p.name;
+  renderStats(p);renderTasks();
+}
+
+function renderStats(p){
+  const tasks=D.tasks.filter(t=>t.pid===p.id);
+  const done=tasks.filter(t=>t.status==='done').length;
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+  const high=tasks.filter(t=>t.priority==='high'&&t.status!=='done').length;
+  const today=new Date().toISOString().split('T')[0];
+  const ov=tasks.filter(t=>t.due&&t.due<today&&t.status!=='done').length;
+  $('srow').innerHTML=`
+    <div class="scard"><div class="slbl">Total</div><div class="sval">${tasks.length}</div><div class="pbg"><div class="pfill" style="width:${pct}%"></div></div><div class="ssub">${pct}% gata</div></div>
+    <div class="scard"><div class="slbl">Finalizate</div><div class="sval" style="color:var(--green)">${done}</div><div class="ssub">din ${tasks.length}</div></div>
+    <div class="scard"><div class="slbl">Prioritate ↑</div><div class="sval" style="color:${high>0?'#f87171':'var(--t1)'}">${high}</div><div class="ssub">deschise</div></div>
+    <div class="scard"><div class="slbl">Depășite</div><div class="sval" style="color:${ov>0?'#f87171':'var(--t1)'}">${ov}</div><div class="ssub">expirate</div></div>`;
+  $('mainMeta').textContent=`${tasks.length} task-uri · ${pct}% finalizate`;
+}
+
+function renderTasks(){
+  if(!curProj) return;
+  const p=D.projects.find(x=>x.id===curProj);if(!p) return;
+  renderStats(p);
+  const q=$('searchInput').value.toLowerCase();
+  const srt=$('sortSel').value;
+  const sfn=(a,b)=>{
+    if(srt==='priority'){const o={high:0,med:1,low:2};return o[a.priority]-o[b.priority];}
+    if(srt==='due'){if(!a.due&&!b.due)return 0;if(!a.due)return 1;if(!b.due)return -1;return a.due.localeCompare(b.due);}
+    return b.created-a.created;
+  };
+  ['todo','inprogress','done'].forEach(st=>{
+    const col=$('col-'+st),kc=$('kc-'+st),cnt=$('cnt-'+st);
+    let tasks=D.tasks.filter(t=>
+      t.pid===curProj&&t.status===st&&
+      (!q||t.title.toLowerCase().includes(q)||(t.desc||'').toLowerCase().includes(q)||(t.tag||'').toLowerCase().includes(q))
+    );
+    tasks.sort(sfn);
+    const vis=curFilter==='all'||curFilter===st;
+    kc.classList.toggle('hm',!vis);
+    cnt.textContent=tasks.length;col.innerHTML='';
+    if(!tasks.length&&vis){
+      const e=document.createElement('div');e.className='ecol';
+      e.innerHTML=`<span style="font-size:18px;opacity:0.3">○</span><span>Niciun task</span>`;col.appendChild(e);
+    } else tasks.forEach(t=>col.appendChild(mkCard(t)));
+  });
+}
+
+/* TASK CARD */
+function mkCard(t){
+  const d=document.createElement('div');
+  d.className='tcard'+(t.status==='done'?' done':'');
+  d.draggable=true;d.dataset.id=t.id;
+  d.addEventListener('dragstart',e=>{dragId=t.id;d.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+  d.addEventListener('dragend',()=>d.classList.remove('dragging'));
+  const today=new Date().toISOString().split('T')[0];
+  const ov=t.due&&t.due<today&&t.status!=='done';
+  const df=t.due?t.due.split('-').reverse().join('/'):null;
+  const pL={high:'Ridicată',med:'Medie',low:'Scăzută'},pC={high:'ph',med:'pm',low:'pl'};
+  d.innerHTML=`
+    <div class="tcard-top">
+      <button class="tchk" onclick="toggleDone('${t.id}')">
+        <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#0e0e10" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="tcontent">
+        <div class="ttitle">${esc(t.title)}</div>
+        ${t.desc?`<div class="tdesc">${esc(t.desc)}</div>`:''}
+      </div>
+    </div>
+    <div class="tfoot">
+      <span class="pb ${pC[t.priority]}">${pL[t.priority]}</span>
+      ${df?`<span class="due${ov?' ov':''}">⏰ ${df}</span>`:''}
+      ${t.tag?`<span class="tag">${esc(t.tag)}</span>`:''}
+    </div>
+    <div class="tacts">
+      <button class="tact" onclick="editTask('${t.id}')">✎</button>
+      <button class="tact del" onclick="delTask('${t.id}')">✕</button>
+    </div>`;
+  return d;
+}
+
+function toggleDone(id){const t=D.tasks.find(x=>x.id===id);if(!t)return;t.status=t.status==='done'?'todo':'done';save();renderTasks();}
+function delTask(id){D.tasks=D.tasks.filter(x=>x.id!==id);save();renderTasks();renderSidebar();toast('Task șters');}
+function editTask(id){
+  const t=D.tasks.find(x=>x.id===id);if(!t)return;
+  editId=id;$('tmTitle').textContent='Editează task';
+  $('tTitle').value=t.title;$('tDesc').value=t.desc||'';
+  $('tPrio').value=t.priority;$('tStatus').value=t.status;
+  $('tDue').value=t.due||'';$('tTag').value=t.tag||'';
+  $('taskModal').classList.add('open');
+}
+
+/* DRAG & DROP */
+function dov(e){e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('dov');}
+function dlv(e){e.currentTarget.classList.remove('dov');}
+function drop(e,st){
+  e.preventDefault();e.currentTarget.classList.remove('dov');
+  if(!dragId) return;
+  const t=D.tasks.find(x=>x.id===dragId);
+  if(t&&t.status!==st){t.status=st;save();renderTasks();}
+  dragId=null;
+}
+
+/* TASK MODAL */
+function openTaskModal(){
+  if(!curProj){toast('Selectează mai întâi un proiect');return;}
+  editId=null;$('tmTitle').textContent='Task nou';
+  ['tTitle','tDesc','tDue','tTag'].forEach(i=>$(i).value='');
+  $('tPrio').value='med';$('tStatus').value='todo';
+  $('taskModal').classList.add('open');
+  setTimeout(()=>$('tTitle').focus(),200);
+}
+function closeTaskModal(){$('taskModal').classList.remove('open');}
+function saveTask(){
+  const title=$('tTitle').value.trim();if(!title){$('tTitle').focus();return;}
+  if(editId){
+    const t=D.tasks.find(x=>x.id===editId);
+    t.title=title;t.desc=$('tDesc').value.trim();
+    t.priority=$('tPrio').value;t.status=$('tStatus').value;
+    t.due=$('tDue').value;t.tag=$('tTag').value.trim();
+    toast('Task actualizat');
+  } else {
+    D.tasks.push({id:uid(),pid:curProj,title,desc:$('tDesc').value.trim(),
+      priority:$('tPrio').value,status:$('tStatus').value,
+      due:$('tDue').value,tag:$('tTag').value.trim(),created:Date.now()});
+    toast('Task adăugat');
+  }
+  save();closeTaskModal();renderTasks();renderSidebar();
+}
+
+/* PROJ MODAL */
+function openProjModal(){
+  $('pName').value='';selColor=COLORS[0];buildCP();
+  $('projModal').classList.add('open');
+  setTimeout(()=>$('pName').focus(),200);
+}
+function closeProjModal(){$('projModal').classList.remove('open');}
+function buildCP(){
+  const cp=$('cpick');cp.innerHTML='';
+  COLORS.forEach(c=>{
+    const s=document.createElement('div');
+    s.className='cswatch'+(c===selColor?' sel':'');
+    s.style.cssText=`background:${c};color:${c}`;
+    s.onclick=()=>{selColor=c;buildCP();};cp.appendChild(s);
+  });
+}
+function saveProj(){
+  const name=$('pName').value.trim();if(!name){$('pName').focus();return;}
+  const p={id:uid(),name,color:selColor};
+  D.projects.push(p);save();closeProjModal();selProj(p.id);renderSidebar();toast('Proiect creat');
+}
+
+/* FILTER */
+function setFilter(f,btn){
+  curFilter=f;
+  document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');renderTasks();
+}
+
+/* KEYBOARD */
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='b'){e.preventDefault();toggleSidebar();}
+  if(e.key==='Escape'){closeTaskModal();closeProjModal();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openTaskModal();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='p'){e.preventDefault();openProjModal();}
+});
+$('taskModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeTaskModal();});
+$('projModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeProjModal();});
+$('tTitle').addEventListener('keydown',e=>{if(e.key==='Enter')saveTask();});
+$('pName').addEventListener('keydown',e=>{if(e.key==='Enter')saveProj();});
+window.addEventListener('resize',initSidebar);
+
+/* INIT */
+buildCP();initSidebar();renderSidebar();renderMain();
+
+/* MIGRATE old data */
+if(D.tasks.length===0&&localStorage.getItem('planner_data')){
+  try{
+    const old=JSON.parse(localStorage.getItem('planner_data'));
+    D.projects=old.projects||[];
+    D.tasks=(old.tasks||[]).map(t=>({...t,pid:t.projectId,created:t.createdAt}));
+    save();renderSidebar();renderMain();
+  }catch(e){}
+}
+
+/* DEMO */
+if(D.projects.length===0){
+  const pid=uid();
+  D.projects.push({id:pid,name:'Proiect Demo',color:'#7c6af7'});
+  const n=Date.now();
+  D.tasks.push(
+    {id:uid(),pid,title:'Definește structura aplicației',desc:'Alege arhitectura și tehnologiile',priority:'high',status:'done',due:'',tag:'arhitectură',created:n-5000},
+    {id:uid(),pid,title:'Crează wireframe-uri',desc:'Schițe pentru paginile principale',priority:'med',status:'inprogress',due:new Date(n+86400000*3).toISOString().split('T')[0],tag:'design',created:n-4000},
+    {id:uid(),pid,title:'Implementează autentificarea',desc:'',priority:'high',status:'todo',due:new Date(n+86400000*7).toISOString().split('T')[0],tag:'dev',created:n-3000},
+    {id:uid(),pid,title:'Integrare API extern',desc:'',priority:'med',status:'todo',due:'',tag:'dev',created:n-2000},
+    {id:uid(),pid,title:'Testare UI/UX',desc:'Feedback de la utilizatori',priority:'low',status:'todo',due:new Date(n+86400000*14).toISOString().split('T')[0],tag:'qa',created:n-1000}
+  );
+  save();selProj(pid);renderSidebar();
+}
+</script>
+</body>
+</html>
